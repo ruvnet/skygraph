@@ -1,0 +1,53 @@
+[package]
+name = "sky-monitor"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+description = "SkyGraph appliance core (ADR-199): ADS-B -> observer-relative sky coordinates -> track stitching -> SkyGraph -> embeddings -> anomaly scoring -> daily sky brief"
+repository = "https://github.com/ruvnet/skygraph"
+
+[features]
+# `appliance` (default, native-only): pulls in the heavy stores — ruvector-core
+# (VectorDB) and ruvector-graph (GraphDB) from crates.io — and the modules
+# built on them: `indexer`, `skygraph`, `pipeline` (plus the demo binary, the
+# acceptance tests, and the benches). With `--no-default-features` the
+# remaining pure modules (config, coords, observation, adsb, track, weather,
+# embedding, anomaly, brief) compile for wasm32-unknown-unknown; that subset
+# is what the `sky-monitor-wasm` browser crate builds on.
+default = ["appliance"]
+appliance = ["dep:ruvector-core", "dep:ruvector-graph"]
+
+[dependencies]
+# Vector memory (ADR-199 §13). default-features off: the in-memory backend
+# keeps the demo hermetic. `simd` + `parallel` match ruvector-graph.
+ruvector-core = { version = "2.2", default-features = false, features = ["simd", "parallel"], optional = true }
+# SkyGraph storage (ADR-199 §12): property-graph nodes/edges with label and
+# property indexes (in-memory GraphDB::new; the redb backend stays unused).
+ruvector-graph = { version = "2.2", optional = true }
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.11", features = ["v4", "serde", "js"] }
+thiserror = "2.0"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[lib]
+bench = false
+
+[[bin]]
+name = "sky-monitor"
+path = "src/main.rs"
+required-features = ["appliance"]
+
+[[test]]
+name = "acceptance"
+required-features = ["appliance"]
+
+[[bench]]
+name = "sky_bench"
+harness = false
+required-features = ["appliance"]

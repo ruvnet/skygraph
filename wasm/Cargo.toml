@@ -1,0 +1,33 @@
+[package]
+name = "sky-monitor-wasm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+description = "Browser-facing WASM engine for the SkyGraph dashboard: projection, SGP4 satellites + pass prediction, track embeddings + vector novelty, and the §15 anomaly scorer. Wraps the pure (non-appliance) subset of sky-monitor."
+repository = "https://github.com/ruvnet/skygraph"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Pure subset only: coords / track / anomaly / adsb / embedding — no
+# ruvector-core / ruvector-graph (those stay behind the native-only
+# `appliance` feature of the core crate).
+sky-monitor = { path = "../core", default-features = false }
+
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde-wasm-bindgen = "0.6"
+
+# Satellite layer: SGP4 propagation from TLEs (pure math, wasm-friendly);
+# chrono only converts the TLE epoch to Unix time.
+sgp4 = "2"
+chrono = { version = "0.4", default-features = false }
+
+# wasm-opt is a size optimization only; skip it so `wasm-pack build` works
+# in offline environments where the binaryen download is unavailable.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

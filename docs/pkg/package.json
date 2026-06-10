@@ -1,0 +1,17 @@
+{
+  "name": "sky-monitor-wasm",
+  "type": "module",
+  "description": "Browser-facing WASM projection engine + anomaly scorer for the RuView SkyGraph dashboard (ADR-199 presentation plane). Wraps the pure (non-appliance) subset of sky-monitor.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "files": [
+    "sky_monitor_wasm_bg.wasm",
+    "sky_monitor_wasm.js",
+    "sky_monitor_wasm.d.ts"
+  ],
+  "main": "sky_monitor_wasm.js",
+  "types": "sky_monitor_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

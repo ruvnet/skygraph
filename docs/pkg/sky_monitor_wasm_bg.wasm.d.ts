@@ -1,0 +1,30 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const __wbg_anomalyscorer_free: (a: number, b: number) => void;
+export const __wbg_satpropagator_free: (a: number, b: number) => void;
+export const __wbg_skyprojector_free: (a: number, b: number) => void;
+export const anomalyscorer_baseline_from: (a: number, b: number, c: number) => void;
+export const anomalyscorer_baseline_len: (a: number) => number;
+export const anomalyscorer_new: () => number;
+export const anomalyscorer_score: (a: number, b: number, c: number, d: number) => void;
+export const band_for: (a: number, b: number) => void;
+export const embed_track: (a: number, b: number, c: number, d: number) => void;
+export const novelty: (a: number, b: number, c: number, d: number) => number;
+export const parse_dump1090_json: (a: number, b: number, c: number) => void;
+export const satpropagator_add_tle: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
+export const satpropagator_count: (a: number) => number;
+export const satpropagator_name: (a: number, b: number, c: number) => void;
+export const satpropagator_new: (a: number, b: number, c: number) => number;
+export const satpropagator_positions: (a: number, b: number, c: number) => void;
+export const satpropagator_predict_passes: (a: number, b: number, c: number, d: number, e: number) => void;
+export const skyprojector_new: (a: number, b: number, c: number) => number;
+export const skyprojector_project: (a: number, b: number, c: number, d: number, e: number) => void;
+export const skyprojector_project_batch: (a: number, b: number, c: number, d: number) => void;
+export const skyprojector_screen_position: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
+export const version: (a: number) => void;
+export const __wbindgen_export: (a: number, b: number) => number;
+export const __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_export3: (a: number) => void;
+export const __wbindgen_add_to_stack_pointer: (a: number) => number;
+export const __wbindgen_export4: (a: number, b: number, c: number) => void;

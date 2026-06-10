@@ -1,0 +1,5 @@
+/target
+**/target
+node_modules
+# NOTE: docs/pkg (the built wasm engine) is deliberately committed so the
+# GitHub Pages demo works without a build step.
