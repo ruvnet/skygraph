@@ -93,6 +93,15 @@
     background: #16203c; color: var(--ink); border: 1px solid var(--panel-edge);
     border-radius: 6px; padding: 2px 8px; font: inherit; cursor: pointer; margin: 4px 0;
   }
+  #drawer input[type="number"] {
+    width: 100%; background: #0c1326; color: var(--ink); cursor: text;
+    border: 1px solid var(--panel-edge); border-radius: 6px;
+    padding: 3px 8px; font: inherit; margin: 2px 0 6px;
+  }
+  #drawer input[type="number"]:focus { outline: none; border-color: var(--accent); }
+  #drawer #opt-locate { width: 100%; }
+  #drawer .row { display: flex; gap: 8px; }
+  #drawer .row label { flex: 1; font-size: 11px; color: var(--ink-dim); }
   #drawer .note { color: var(--ink-dim); font-size: 11px; margin-top: 14px; line-height: 1.5; }
 </style>
 </head>
@@ -159,14 +168,25 @@
     <button id="opt-pass-alerts" title="Browser notification ~5 min before a visible pass">
       Enable pass alerts
     </button>
+    <h2>Location</h2>
+    <button id="opt-locate" title="Centre the sky on this device's location (asks for permission)">
+      📍 Use my location
+    </button>
+    <div class="row">
+      <label for="opt-lat">Latitude<input type="number" id="opt-lat" step="0.0001" min="-90" max="90"></label>
+      <label for="opt-lon">Longitude<input type="number" id="opt-lon" step="0.0001" min="-180" max="180"></label>
+    </div>
+    <label for="opt-alt">Altitude (m)<input type="number" id="opt-alt" step="1"></label>
+    <button id="opt-loc-apply">Apply coordinates</button>
+    <button id="opt-loc-reset" title="Back to the oakville_node reference node">Reset to default</button>
     <div class="note">
-      Observer: oakville_node · ADS-B poll 5 s (airplanes.live) ·
+      Observer: your location or set above · ADS-B poll 5 s (airplanes.live) ·
       weather 10 min (Open-Meteo) · Kp 15 min (NOAA SWPC) ·
       TLEs 6 h (CelesTrak) · routes on selection (adsbdb, 24 h cache) ·
       replay buffer ~1 h (IndexedDB). Settings persist in this browser.
     </div>
   </div>
   <!-- bump ?v= when module structure changes, so cached tabs re-fetch -->
-  <script type="module" src="./sky.js?v=5"></script>
+  <script type="module" src="./sky.js?v=6"></script>
 </body>
 </html>

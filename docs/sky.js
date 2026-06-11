@@ -32,10 +32,80 @@ import { Recorder } from "./record.js";
 import { GpuSats } from "./gpu-sats.js";
 import { loadTles } from "./sat-feed.js";
 
-// Reference observer (matches src/config.rs ObserverConfig defaults).
-const OBSERVER = { name: "oakville_node", lat: 43.4675, lon: -79.6877, alt_m: 100.0 };
+// Reference observer (matches src/config.rs ObserverConfig defaults). Used as
+// the fallback whenever the browser can't or won't share a location.
+const DEFAULT_OBSERVER = { name: "oakville_node", lat: 43.4675, lon: -79.6877, alt_m: 100.0 };
+const LOCATION_KEY = "skygraph-observer-v1";
+
+// A previously chosen observer: a geolocation grant, a manual entry, or an
+// explicit reset to the default. null when nothing has been stored yet.
+function loadSavedObserver() {
+  try {
+    const o = JSON.parse(localStorage.getItem(LOCATION_KEY) || "null");
+    if (o && Number.isFinite(o.lat) && Number.isFinite(o.lon)) {
+      return {
+        name: o.name || "your location",
+        lat: o.lat, lon: o.lon,
+        alt_m: Number.isFinite(o.alt_m) ? o.alt_m : DEFAULT_OBSERVER.alt_m,
+        source: o.source || "manual",
+      };
+    }
+  } catch (_e) { /* corrupt entry — ignore */ }
+  return null;
+}
+
+function saveObserver(o) {
+  try { localStorage.setItem(LOCATION_KEY, JSON.stringify(o)); } catch (_e) { /* quota */ }
+}
+
+// One-shot browser geolocation. Resolves to an observer, or null when it is
+// denied, unsupported, times out, or the page isn't a secure context.
+function geolocate(opts) {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => resolve({
+        name: "your location",
+        lat: +coords.latitude.toFixed(5),
+        lon: +coords.longitude.toFixed(5),
+        alt_m: Number.isFinite(coords.altitude) ? Math.round(coords.altitude) : DEFAULT_OBSERVER.alt_m,
+        source: "geo",
+      }),
+      () => resolve(null),
+      opts || { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
+    );
+  });
+}
+
+// Decide the observer before anything is wired up. A manual/default choice is
+// honoured verbatim; a prior geolocation grant is refreshed while still
+// permitted; a first visit asks the browser once and falls back to the
+// reference node when that's declined or unavailable.
+async function resolveObserver() {
+  const saved = loadSavedObserver();
+  if (saved && (saved.source === "manual" || saved.source === "default")) return saved;
+
+  let permission = "prompt";
+  try {
+    permission = (await navigator.permissions.query({ name: "geolocation" })).state;
+  } catch (_e) { /* Permissions API absent — fall through and just try */ }
+
+  if (saved && saved.source === "geo") {
+    if (permission === "denied") return saved; // revoked since; reuse the cached fix
+    const fresh = await geolocate();
+    if (fresh) { saveObserver(fresh); return fresh; }
+    return saved;
+  }
+
+  if (permission !== "denied") { // first visit — don't prompt if already blocked
+    const located = await geolocate();
+    if (located) { saveObserver(located); return located; }
+  }
+  return { ...DEFAULT_OBSERVER, source: "default" };
+}
 
 async function main() {
+  const OBSERVER = await resolveObserver();
   const canvas = document.getElementById("sky");
   const gpuCanvas = document.getElementById("sky-gpu");
   const ctx = canvas.getContext("2d");
@@ -47,8 +117,11 @@ async function main() {
   const satTbody = document.querySelector("#sat-table tbody");
   const details = document.getElementById("details");
   const passList = document.getElementById("pass-list");
+  const obsName = OBSERVER.source === "geo" ? "📍 your location"
+    : OBSERVER.source === "manual" ? "📍 manual location"
+    : `${OBSERVER.name} (default)`;
   document.getElementById("observer-label").textContent =
-    `observer: ${OBSERVER.name} (${OBSERVER.lat.toFixed(4)}, ${OBSERVER.lon.toFixed(4)}, ${OBSERVER.alt_m} m)`;
+    `observer: ${obsName} (${OBSERVER.lat.toFixed(4)}, ${OBSERVER.lon.toFixed(4)}, ${OBSERVER.alt_m} m)`;
 
   // Prefer wasm when ./pkg is present (projection + SGP4 + scoring + §13).
   const obsEcef = geodeticToEcef(OBSERVER.lat, OBSERVER.lon, OBSERVER.alt_m);
@@ -126,6 +199,27 @@ async function main() {
     onWebgpu: setWebgpu,
     onTleGroup: (g) => loadSats(g),
     onPassAlerts: async () => (passes ? passes.enableAlerts() : false),
+    // Location controls. Each choice persists then reloads, so the whole
+    // pipeline (ECEF, wasm projector, SGP4, feed search) re-inits cleanly
+    // against the new observer rather than being patched live.
+    observer: OBSERVER,
+    onLocate: async () => {
+      const o = await geolocate({ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+      if (!o) return false;
+      saveObserver(o);
+      location.reload();
+      return true;
+    },
+    onManualLocation: (lat, lon, alt) => {
+      if (![lat, lon].every(Number.isFinite) || lat < -90 || lat > 90 || lon < -180 || lon > 180) return false;
+      saveObserver({ name: "manual", lat, lon, alt_m: Number.isFinite(alt) ? alt : DEFAULT_OBSERVER.alt_m, source: "manual" });
+      location.reload();
+      return true;
+    },
+    onResetLocation: () => {
+      try { localStorage.removeItem(LOCATION_KEY); } catch (_e) { /* ignore */ }
+      location.reload();
+    },
   });
   if (CFG.webgpuSats) {
     setWebgpu(true).then((ok) => {
