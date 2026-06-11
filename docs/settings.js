@@ -83,6 +83,41 @@ export function initDrawer(handlers) {
     alertBtn.textContent = on ? "Pass alerts: ON" : "Pass alerts: unavailable";
   });
 
+  // Observer location: device geolocation, manual lat/lon/alt, or reset to
+  // the reference node. Each handler persists + reloads (see sky.js); the
+  // inputs are pre-filled with the active observer for easy nudging.
+  const obs = handlers.observer || {};
+  const latIn = document.getElementById("opt-lat");
+  const lonIn = document.getElementById("opt-lon");
+  const altIn = document.getElementById("opt-alt");
+  if (latIn) latIn.value = obs.lat ?? "";
+  if (lonIn) lonIn.value = obs.lon ?? "";
+  if (altIn) altIn.value = obs.alt_m ?? "";
+
+  const locateBtn = document.getElementById("opt-locate");
+  locateBtn?.addEventListener("click", async () => {
+    const restore = locateBtn.textContent;
+    locateBtn.textContent = "📍 locating…";
+    locateBtn.disabled = true;
+    const ok = await handlers.onLocate();
+    if (!ok) { // denied / unavailable — getCurrentPosition handlers won't reload
+      locateBtn.disabled = false;
+      locateBtn.textContent = "📍 unavailable — check permissions";
+      setTimeout(() => { locateBtn.textContent = restore; }, 2600);
+    }
+  });
+
+  document.getElementById("opt-loc-apply")?.addEventListener("click", () => {
+    const ok = handlers.onManualLocation(Number(latIn.value), Number(lonIn.value), Number(altIn.value));
+    if (ok === false) { // invalid — flag the inputs, keep what the user typed
+      latIn.style.borderColor = "var(--warn)";
+      lonIn.style.borderColor = "var(--warn)";
+    }
+  });
+
+  document.getElementById("opt-loc-reset")
+    ?.addEventListener("click", () => handlers.onResetLocation());
+
   syncTleOptions();
   return { syncTleOptions };
 }
