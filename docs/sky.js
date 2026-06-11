@@ -38,6 +38,7 @@ const OBSERVER = { name: "oakville_node", lat: 43.4675, lon: -79.6877, alt_m: 10
 async function main() {
   const canvas = document.getElementById("sky");
   const gpuCanvas = document.getElementById("sky-gpu");
+  const view3dCanvas = document.getElementById("sky3d");
   const ctx = canvas.getContext("2d");
   const clock = document.getElementById("clock");
   const wxLabel = document.getElementById("wx");
@@ -122,6 +123,36 @@ async function main() {
     return false;
   }
 
+  // --- 3D view (optional, lazy) -----------------------------------------------
+  // The observer-centred WebGL scene lives in ./sky3d.js and pulls three.js
+  // from a CDN. It's imported only on demand, so a blocked CDN disables 3D
+  // alone and the 2D dome keeps working. Clicking an object there selects it,
+  // mirroring the side tables.
+  let sky3d = null;
+  async function setView3d(on) {
+    if (!on) {
+      sky3d?.dispose();
+      sky3d = null;
+      document.body.classList.remove("view-3d");
+      return true;
+    }
+    if (sky3d) { document.body.classList.add("view-3d"); return true; }
+    try {
+      const { Sky3D } = await import("./sky3d.js");
+      const s = new Sky3D();
+      s.init(view3dCanvas, {
+        onSelectAircraft: (tr) => { selected = selected === tr ? null : tr; selectedSat = -1; showDetails(); },
+        onSelectSat: (i) => { selectedSat = selectedSat === i ? -1 : i; selected = null; showDetails(); },
+      });
+      sky3d = s;
+      document.body.classList.add("view-3d");
+      return true;
+    } catch (_e) {
+      satStatus.textContent = "3D: unavailable (three.js failed to load)";
+      return false;
+    }
+  }
+
   const drawerCtl = initDrawer({
     onWebgpu: setWebgpu,
     onTleGroup: (g) => loadSats(g),
@@ -137,6 +168,26 @@ async function main() {
       }
     });
   }
+
+  // On-screen 2D/3D switch (top-right of the sky view). Persists the choice
+  // and reverts to 2D if three.js can't load.
+  const view2dBtn = document.getElementById("view-2d");
+  const view3dBtn = document.getElementById("view-3d");
+  function syncViewToggle(on) {
+    view3dBtn.classList.toggle("on", on);
+    view2dBtn.classList.toggle("on", !on);
+  }
+  async function applyView(on) {
+    const ok = await setView3d(on);
+    CFG.view3d = on && ok;
+    saveSettings();
+    syncViewToggle(CFG.view3d);
+  }
+  view3dBtn.addEventListener("click", () => applyView(true));
+  view2dBtn.addEventListener("click", () => applyView(false));
+  syncViewToggle(CFG.view3d);
+  if (CFG.view3d) applyView(true); // restore 3D from a previous session
+
   loadSats(CFG.tleGroup);
 
   // Propagate + draw satellites at timeline t. Canvas2D diamonds by
@@ -225,8 +276,8 @@ async function main() {
   function reckonGhost(tr, tNow) {
     const g = displayPoint(tr, tNow);
     if (g) {
-      const [az, el] = observerFrameJs(OBSERVER, obsEcef, g.lat, g.lon, g.alt_m);
-      g.az = az; g.el = el;
+      const [az, el, range] = observerFrameJs(OBSERVER, obsEcef, g.lat, g.lon, g.alt_m);
+      g.az = az; g.el = el; g.range = range; // range feeds 3D depth; unused by 2D
     }
     tr._ghost = g;
   }
@@ -344,8 +395,51 @@ async function main() {
   liveBtn.addEventListener("click", exitReplay);
   scrub.addEventListener("input", () => { replay.t = Number(scrub.value); });
 
-  // --- Render loop ---------------------------------------------------------------
-  function render() {
+  // Feed the 3D scene from the same per-frame data the 2D dome uses: aircraft
+  // by az/el (+ range for depth), satellites propagated once, sun & moon on
+  // the dome shell. Also populates satsAbove so the side tables stay in sync.
+  function render3d() {
+    const tracks = replay.active ? replay.tracks : feed.trackList;
+    const acList = [];
+    if (CFG.aircraft) {
+      for (const tr of tracks) {
+        if (!tr.points.length || tr.points[tr.points.length - 1].az === undefined) continue;
+        if (!replay.active) reckonGhost(tr, t);
+        const p = (!replay.active && tr._ghost) ? tr._ghost : tr.points[tr.points.length - 1];
+        if (!p || p.az === undefined || !(p.el > 0)) continue;
+        acList.push({ az: p.az, el: p.el, range: p.range, color: tr.color || LIVE_COLOR,
+          selected: tr === selected, label: tr.label, ref: tr });
+        if (!replay.active) {
+          const entry = liveRows.get(tr);
+          if (entry) { entry.row.classList.toggle("live", true); entry.row.classList.toggle("active", tr === selected); }
+        }
+      }
+    }
+    const satList = [], above = [];
+    if (satProp && CFG.satellites) {
+      const out = satProp.positions(t);
+      const dark = sun.el < -6;
+      for (let i = 0; i * 6 < out.length; i++) {
+        const el = out[i * 6 + 4];
+        if (!isFinite(el) || el <= 0) continue;
+        const az = out[i * 6 + 3];
+        const visibleNow = dark && satSunlit(out[i * 6], out[i * 6 + 1], out[i * 6 + 2], sun.dir);
+        satList.push({ az, el, range: out[i * 6 + 5], visibleNow, selected: i === selectedSat, satIndex: i });
+        above.push({ i, az, el, range: out[i * 6 + 5], alt: out[i * 6 + 2], visibleNow });
+      }
+    }
+    satsAbove = above;
+    let sunBody = null, moonBody = null;
+    if (CFG.sunmoon) {
+      sunBody = { az: sun.az, el: sun.el, visible: sun.el > -0.8 };
+      const moon = moonPosition(t, OBSERVER.lat, OBSERVER.lon);
+      moonBody = { az: moon.az, el: moon.el, visible: moon.el > -0.8 };
+    }
+    sky3d.update({ aircraft: acList, sats: satList, sun: sunBody, moon: moonBody, showLabels: CFG.labels });
+    sky3d.render();
+  }
+
+  function render2d() {
     const dpr = window.devicePixelRatio || 1;
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
@@ -389,6 +483,12 @@ async function main() {
       satsAbove = [];
       if (gpu) gpu.draw(gpuInst, 0, w, h, dpr); // clear the overlay
     }
+  }
+
+  // --- Render loop ---------------------------------------------------------------
+  function render() {
+    if (CFG.view3d && sky3d) render3d();
+    else render2d();
     const wallSec = Math.floor(Date.now() / 1000);
     if (wallSec !== lastStatusSec) {
       lastStatusSec = wallSec; // 1 Hz: sun, status, tables, details, passes
