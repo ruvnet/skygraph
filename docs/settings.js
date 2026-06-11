@@ -6,6 +6,7 @@ export const SETTINGS_KEY = "skygraph-settings-v1";
 const DEFAULTS = {
   aircraft: true, satellites: true, sunmoon: true, trails: true, labels: true,
   conflicts: true, trailLen: 150, webgpuSats: false, tleGroup: "visual",
+  view3d: false,
 };
 
 export const CFG = (() => {
@@ -82,6 +83,9 @@ export function initDrawer(handlers) {
     const on = await handlers.onPassAlerts();
     alertBtn.textContent = on ? "Pass alerts: ON" : "Pass alerts: unavailable";
   });
+
+  // Note: the 2D/3D view switch lives on the main view itself (#view-toggle,
+  // wired in sky.js), not in this drawer.
 
   syncTleOptions();
   return { syncTleOptions };

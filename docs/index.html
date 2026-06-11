@@ -47,6 +47,23 @@
   }
   /* WebGPU satellite overlay sits transparently above the 2D dome. */
   #sky-gpu { position: absolute; inset: 0; pointer-events: none; }
+  /* 3D view: hidden until toggled, then it replaces the 2D dome in place. */
+  #sky3d { position: absolute; inset: 0; display: none; border-radius: 10px;
+           border: 1px solid var(--panel-edge); }
+  body.view-3d #sky, body.view-3d #sky-gpu { display: none; }
+  body.view-3d #sky3d { display: block; }
+  /* On-screen 2D/3D switch, top-right of the sky view. */
+  #view-toggle {
+    position: absolute; top: 10px; right: 10px; z-index: 5; display: flex;
+    background: rgba(13, 18, 32, 0.78); border: 1px solid var(--panel-edge);
+    border-radius: 8px; padding: 2px; gap: 2px; backdrop-filter: blur(3px);
+  }
+  #view-toggle button {
+    background: transparent; color: var(--ink-dim); border: 0; cursor: pointer;
+    font: 600 12px/1 inherit; padding: 5px 12px; border-radius: 6px; letter-spacing: 0.04em;
+  }
+  #view-toggle button:hover { color: #e8eefc; }
+  #view-toggle button.on { background: var(--accent); color: #07111f; }
   aside {
     flex: 0 0 360px; max-width: 40%; overflow-y: auto;
     background: var(--panel); border: 1px solid var(--panel-edge);
@@ -110,6 +127,11 @@
     <div id="sky-wrap">
       <canvas id="sky"></canvas>
       <canvas id="sky-gpu" width="1" height="1"></canvas>
+      <canvas id="sky3d"></canvas>
+      <div id="view-toggle" role="group" aria-label="View mode">
+        <button id="view-2d" class="on" title="Flat all-sky dome">2D</button>
+        <button id="view-3d" title="Orbit &amp; zoom the sky in 3D space">3D</button>
+      </div>
     </div>
     <aside>
       <h2>Track details</h2>
@@ -166,7 +188,18 @@
       replay buffer ~1 h (IndexedDB). Settings persist in this browser.
     </div>
   </div>
+  <!-- three.js for the optional 3D view (./sky3d.js), loaded on demand. The
+       import map only resolves the bare specifiers; nothing downloads until
+       the 3D toggle dynamically imports ./sky3d.js. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
   <!-- bump ?v= when module structure changes, so cached tabs re-fetch -->
-  <script type="module" src="./sky.js?v=5"></script>
+  <script type="module" src="./sky.js?v=6"></script>
 </body>
 </html>
