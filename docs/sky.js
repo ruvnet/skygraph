@@ -32,10 +32,45 @@ import { Recorder } from "./record.js";
 import { GpuSats } from "./gpu-sats.js";
 import { loadTles } from "./sat-feed.js";
 
-// Reference observer (matches src/config.rs ObserverConfig defaults).
+// Reference observer (matches src/config.rs ObserverConfig defaults). Used as
+// the fallback when the browser won't share a location (denied/unsupported).
 const OBSERVER = { name: "oakville_node", lat: 43.4675, lon: -79.6877, alt_m: 100.0 };
 
+// Ask the browser for the viewer's position and mutate OBSERVER in place before
+// anything reads it. Resolves whether or not we got a fix — on denial, timeout,
+// insecure context, or no support we keep the Oakville fallback. Honours an
+// explicit ?lat=&lon= override in the URL for sharing a fixed vantage point.
+async function resolveObserver() {
+  const q = new URLSearchParams(location.search);
+  const qLat = parseFloat(q.get("lat"));
+  const qLon = parseFloat(q.get("lon"));
+  if (Number.isFinite(qLat) && Number.isFinite(qLon)) {
+    OBSERVER.name = "url_override";
+    OBSERVER.lat = qLat;
+    OBSERVER.lon = qLon;
+    const qAlt = parseFloat(q.get("alt"));
+    if (Number.isFinite(qAlt)) OBSERVER.alt_m = qAlt;
+    return;
+  }
+  if (!navigator.geolocation) return;
+  await new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        OBSERVER.name = "browser_node";
+        OBSERVER.lat = pos.coords.latitude;
+        OBSERVER.lon = pos.coords.longitude;
+        if (Number.isFinite(pos.coords.altitude)) OBSERVER.alt_m = pos.coords.altitude;
+        resolve();
+      },
+      () => resolve(), // denied / unavailable / timeout — keep the fallback
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
+    );
+  });
+}
+
 async function main() {
+  await resolveObserver();
+
   const canvas = document.getElementById("sky");
   const gpuCanvas = document.getElementById("sky-gpu");
   const view3dCanvas = document.getElementById("sky3d");
